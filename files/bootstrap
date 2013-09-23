@@ -1,0 +1,108 @@
+#!/bin/bash
+
+unset VM_DESKTOP_CONFIG
+
+usage()
+{
+cat << EOF
+usage: $0 options
+
+Launch the given environment with the correct variables
+
+OPTIONS:
+	-h Show this message
+	-d Use desktop sized virtual environment
+	-g git repository url for the feature being developed (not the bootstrap repo url)
+	-f The name of the feature being developed
+	-e The environment on which the feature is being developed
+	-1 The first command to invoke vagrant with "up" "down" "destroy" "status"
+	-2 The second command to invoke vagrant with.
+	-q Quiet, do not print verbose, opposite of -v
+	-v Print verbose log messages
+	-n Invoke the vagrant commands on this node
+EOF
+}
+
+
+while getopts "hdvq1:2:n:g:f:e:" OPTION
+do
+	case $OPTION in 
+		h)
+			usage
+			exit 1
+		;;
+		g)
+			export scm_url=$OPTARG
+		;;
+		d)
+			export VM_DESKTOP_CONFIG=1
+		;;
+		f)
+			export feature=$OPTARG
+		;;
+		1)
+			export cmdone=$OPTARG
+		;;
+		2)
+			export cmdtwo=$OPTARG
+		;;
+		n)
+			export node=$OPTARG
+		;;
+		e)
+			export env=$OPTARG
+		;;
+		q)
+			unset VAGRANT_LOG
+		;;
+		v)
+			export VAGRANT_LOG=debug
+		;;
+		?)
+			usage
+			exit -1
+		;;
+	esac
+done
+
+currentDir=`cd $(dirname $0); pwd`
+while [[ "$currentDir" != "/" ]] ; do
+	if [[ -f "$currentDir/Vagrantfile" ]] ; then
+		vagrantDir=$currentDir;
+		break;
+	fi
+	currentDir=`dirname $currentDir`
+done
+while [[ "$currentDir" != "/" ]] ; do 
+	echo $currentDir
+	if [[ -d "$currentDir/.git" ]] ; then
+		gitDir=$currentDir
+		break;
+	fi
+	currentDir=`dirname $currentDir`
+done
+if [[ -z "$scm_url" ]] ; then
+	export scm_url=`cd $gitDir;git remote show origin | grep "Fetch URL" | grep -o 'http.*$'` 
+fi
+if [[ -z "$feature" ]] ; then
+	export feature=`basename $gitDir`
+fi
+if [[ -z "$env" ]] ; then
+	export env=`hostname -s`
+fi
+
+echo scm_url:$scm_url
+echo feature:$feature
+echo env:$env	
+
+if [[ -z "${cmdtwo}" && -z "${cmdone}" ]] ; then
+	export cmdone=reload
+	export cmdtwo=up
+fi
+if [[ -n "${cmdone}" ]] ; then
+	( cd $vagrantDir; vagrant ${cmdone:-reload} $node )
+fi
+if [[ -n "${cmdtwo}" ]] ; then
+	( cd $vagrantDir; vagrant ${cmdtwo} $node )
+fi
+		

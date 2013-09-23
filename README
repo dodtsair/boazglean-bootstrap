@@ -1,0 +1,17 @@
+bootstrap
+
+Bootstrap puppet module for installing puppet modules.  Supports installing modules from maven repositories
+
+License
+-------
+The MIT License (MIT)
+
+Copyright (c) 2013 Mike Power
+
+Contact
+-------
+mpower@alumni.calpoly.edu
+
+Support
+-------
+Please log tickets and issues at our [Projects site](http://github.com/dodtsair/boazglean-bootstrap)

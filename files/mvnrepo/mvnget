@@ -1,0 +1,124 @@
+#!/bin/bash
+
+GAV=
+GROUP_ID=
+ARTIFACT_ID=
+PACKAGING=
+VERSION=
+CLASSIFIER=
+URL=
+TARGET=
+SNAPSHOT_VERSION=
+TARGET_PATH=.
+IPV4=
+
+usage()
+{
+cat << EOF
+usage: $0 options
+
+Download a maven artifact from a maven2 or maven3 repository
+
+OPTIONS:
+	-h Show this message
+	-g The GAV coordinate see http://maven.apache.org/pom.html#Maven_Coordinates
+		Examples:
+		groupId:artifactId:version
+		groupId:artifactId:packaging:version
+		groupId:artifactId:packaging:classifier:version
+	-u The base url for the maven repository.  For example: http://repo1.maven.org/maven2/
+	-o The output file or folder
+	-x Extract the resulting file
+EOF
+}
+
+split_gav()
+{
+	TOKENS=()
+	for TOKEN in `echo -n $1 | grep -o '[^:]*'`; do
+		TOKENS=( ${TOKENS[@]} "$TOKEN" )
+	done
+	if [[ ${#TOKENS[@]} -lt 3 || ${#TOKENS[@]} -gt 5 ]] ; then
+		echo Invalid GAV: $1
+		exit -2
+	fi	
+	GROUP_ID=${TOKENS[0]}
+	ARTIFACT_ID=${TOKENS[1]}
+	if [[ ${#TOKENS[@]} -gt 3 ]] ; then
+		PACKAGING=${TOKENS[2]}
+	else 
+		VERSION=${TOKENS[2]}
+	fi
+	if [[ ${#TOKENS[@]} -gt 4 ]] ; then
+		CLASSIFIER=${TOKENS[3]}
+		VERSION=${TOKENS[4]}
+	else
+		VERSION=${TOKENS[3]}
+	fi
+}	
+
+snapshot_version()
+{
+
+	BUILD_NUMBER=`curl $IPV4 -L -f -s $URL/$GROUP_PATH/$ARTIFACT_ID/$VERSION/maven-metadata.xml | grep -B 1 "buildNumber"`
+	TIMESTAMP=`echo -n $BUILD_NUMBER | sed -e 's/\n//;s|<[^>]*>||g;s|\([0-9]\)[^0-9.]\+\([0-9]\)|\1-\2|g' | grep -o '[0-9].*[0-9]'`
+	SNAPSHOT_VERSION=`echo $VERSION | sed -e 's|SNAPSHOT||'`$TIMESTAMP
+}
+
+
+while getopts "hx4g:u:o:" OPTION
+do
+	case $OPTION in 
+		h)
+			usage
+			exit 1
+		;;
+		4)
+			IPV4='-4'
+		;;
+		g)
+			GAV=$OPTARG
+		;;
+		u)
+			URL=$OPTARG
+		;;
+		o)
+			TARGET=$OPTARG
+		;;
+		?)
+			usage
+			exit -1
+		;;
+	esac
+done
+
+if [[ -z $GAV || -z $URL ]] ; then
+	usage
+	exit 1
+fi
+
+split_gav $GAV
+
+GROUP_PATH=`echo -n $GROUP_ID | sed -e 's|\.|/|g'`
+
+if echo -n "$VERSION" | grep "SNAPSHOT"; then
+	snapshot_version
+fi
+
+if [[ -z $PACKAGING ]] ; then
+	PACKAGING=jar
+fi
+
+if [[ -n $TARGET && `dirname $TARGET` != '.' ]] ; then
+	TARGET_PATH=`dirname $TARGET`
+fi
+if [[ -n $TARGET ]] ; then
+	TARGET_FILE=`basename $TARGET`
+fi
+if [[ -z $TARGET && -n $SNAPSHOT_VERSION ]] ; then
+	TARGET_FILE=$ARTIFACT_ID-${VERSION}${CLASSIFIER:+-}${CLASSIFIER}.$PACKAGING
+fi
+cd $TARGET_PATH
+curl $IPV4 -L -f -s ${TARGET_FILE:+-o} ${TARGET_FILE:--O}  $URL/$GROUP_PATH/$ARTIFACT_ID/$VERSION/$ARTIFACT_ID-${SNAPSHOT_VERSION:-${VERSION}}${CLASSIFIER:+-}${CLASSIFIER}.$PACKAGING
+
+		
